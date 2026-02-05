@@ -222,6 +222,13 @@ if(length(found_doublet_cols) > 0) {
   # 只分析同时有双胞和单胞的数据
   if(sum(doublet_cells, na.rm = TRUE) > 0 && sum(singlet_cells, na.rm = TRUE) > 0) {
     
+    # 创建输出目录
+    doublet_output_dir <- "doublet_analysis_plots"
+    dir.create(doublet_output_dir, showWarnings = FALSE)
+    
+    # 开始生成PDF
+    pdf(file.path(doublet_output_dir, "doublet_qc_comparison.pdf"), width = 12, height = 10)
+    
     cat("\n[双胞与单胞的QC指标比较]\n")
     
     qc_metrics <- c("nCount_RNA", "nFeature_RNA", "percent.mt", "percent.C")
@@ -234,7 +241,7 @@ if(length(found_doublet_cols) > 0) {
       Median = numeric(),
       SD = numeric(),
       Min = numeric(),
-      Max = numeric(),
+      Min = numeric(),
       stringsAsFactors = FALSE
     )
     
@@ -277,6 +284,113 @@ if(length(found_doublet_cols) > 0) {
     cat("\n双胞 vs 单胞统计比较:\n")
     print(comparison_wide)
     
+    # 在PDF中创建统计表格图
+    library(gridExtra)
+    
+    # 1. 创建统计摘要表格图
+    table_plot <- tableGrob(
+      comparison_wide %>% 
+        mutate(across(where(is.numeric), ~round(., 2))),
+      rows = NULL,
+      theme = ttheme_minimal(
+        base_size = 10,
+        padding = unit(c(4, 4), "mm"),
+        core = list(fg_params = list(hjust = 0, x = 0.05)),
+        colhead = list(fg_params = list(fontface = "bold"))
+      )
+    )
+    
+    grid.arrange(
+      tableGrob(
+        data.frame(Title = "双胞与单胞QC指标统计比较"),
+        rows = NULL,
+        theme = ttheme_minimal(base_size = 14, padding = unit(c(8, 4), "mm"))
+      ),
+      table_plot,
+      nrow = 2,
+      heights = c(0.5, 2)
+    )
+    
+    # 2. 创建箱线图比较
+    library(ggplot2)
+    library(patchwork)
+    
+    plots <- list()
+    for(metric in available_qc) {
+      # 准备数据
+      plot_data <- data.frame(
+        Group = factor(c(rep("Doublet", sum(doublet_cells)), 
+                         rep("Singlet", sum(singlet_cells)))),
+        Value = c(meta_data[doublet_cells, metric], 
+                 meta_data[singlet_cells, metric])
+      )
+      
+      # 创建箱线图
+      p <- ggplot(plot_data, aes(x = Group, y = Value, fill = Group)) +
+        geom_boxplot(outlier.size = 0.8, outlier.alpha = 0.5) +
+        labs(
+          title = paste(metric, "分布比较"),
+          x = "细胞类型",
+          y = metric
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          legend.position = "none",
+          axis.text = element_text(size = 10),
+          axis.title = element_text(size = 11)
+        ) +
+        scale_fill_manual(values = c("Doublet" = "#E74C3C", "Singlet" = "#3498DB"))
+      
+      # 如果是UMI或基因数，使用对数坐标
+      if(metric %in% c("nCount_RNA", "nFeature_RNA")) {
+        p <- p + scale_y_log10() +
+          labs(y = paste(metric, "(log10)"))
+      }
+      
+      plots[[metric]] <- p
+    }
+    
+    # 组合所有QC指标图
+    n_cols <- 2
+    n_rows <- ceiling(length(plots) / n_cols)
+    combined_plot <- wrap_plots(plots, ncol = n_cols, nrow = n_rows) + 
+      plot_annotation(
+        title = "双胞与单胞QC指标比较",
+        theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
+      )
+    print(combined_plot)
+    
+    # 3. 创建散点图
+    if("nCount_RNA" %in% available_qc && "nFeature_RNA" %in% available_qc) {
+      scatter_data <- data.frame(
+        UMI = log10(meta_data$nCount_RNA + 1),
+        Genes = log10(meta_data$nFeature_RNA + 1),
+        Doublet = meta_data[[doublet_col]]
+      )
+      
+      p_scatter <- ggplot(scatter_data, aes(x = UMI, y = Genes, color = Doublet)) +
+        geom_point(alpha = 0.6, size = 0.8) +
+        scale_color_manual(
+          values = c("Doublet" = "#E74C3C", "Singlet" = "#3498DB"),
+          name = "细胞类型"
+        ) +
+        labs(
+          title = "UMI与基因数关系图",
+          x = "log10(UMI + 1)",
+          y = "log10(基因数 + 1)"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          legend.position = "right"
+        ) +
+        stat_density_2d(aes(fill = ..level..), geom = "polygon", alpha = 0.3) +
+        scale_fill_gradient(low = "blue", high = "red")
+      
+      print(p_scatter)
+    }
+    
     # Wilcoxon检验
     cat("\n[统计检验 - Wilcoxon秩和检验]\n")
     test_results <- data.frame(
@@ -294,7 +408,7 @@ if(length(found_doublet_cols) > 0) {
         test <- wilcox.test(doublet_values, singlet_values)
         # 计算效应量（Cohen's d）
         pooled_sd <- sqrt(((length(doublet_values)-1)*var(doublet_values) + 
-                           (length(singlet_values)-1)*var(singlet_values)) /
+                           (length(singlet_cells)-1)*var(singlet_values)) /
                           (length(doublet_values) + length(singlet_values) - 2))
         effect_size <- (mean(doublet_values) - mean(singlet_values)) / pooled_sd
         
@@ -313,6 +427,30 @@ if(length(found_doublet_cols) > 0) {
                                          ifelse(test_results$p_adj < 0.01, "**",
                                                 ifelse(test_results$p_adj < 0.05, "*", "ns")))
       print(test_results)
+      
+      # 在PDF中添加统计检验结果表
+      test_table <- tableGrob(
+        test_results %>% 
+          mutate(across(where(is.numeric), ~round(., 4))),
+        rows = NULL,
+        theme = ttheme_minimal(
+          base_size = 10,
+          padding = unit(c(4, 4), "mm"),
+          core = list(fg_params = list(hjust = 0, x = 0.05)),
+          colhead = list(fg_params = list(fontface = "bold"))
+        )
+      )
+      
+      grid.arrange(
+        tableGrob(
+          data.frame(Title = "统计检验结果"),
+          rows = NULL,
+          theme = ttheme_minimal(base_size = 14, padding = unit(c(8, 4), "mm"))
+        ),
+        test_table,
+        nrow = 2,
+        heights = c(0.3, 2)
+      )
     }
     
     # 双胞在各批次中的分布
@@ -327,10 +465,58 @@ if(length(found_doublet_cols) > 0) {
       
       print(doublet_by_batch)
       
+      # 在PDF中添加批次分布图
+      batch_doublet_data <- as.data.frame(doublet_by_batch)
+      colnames(batch_doublet_data) <- c("Batch", "DoubletStatus", "Count")
+      
+      p_batch <- ggplot(batch_doublet_data, 
+                       aes(x = Batch, y = Count, fill = DoubletStatus)) +
+        geom_bar(stat = "identity", position = "fill") +
+        scale_fill_manual(values = c("Doublet" = "#E74C3C", "Singlet" = "#3498DB")) +
+        labs(
+          title = "各批次双胞比例",
+          x = "批次",
+          y = "比例",
+          fill = "细胞类型"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom"
+        ) +
+        scale_y_continuous(labels = scales::percent_format())
+      
+      print(p_batch)
+      
       # 计算每个批次的双胞率
       doublet_rate_by_batch <- prop.table(doublet_by_batch, margin = 1)
       cat("\n各批次双胞率:\n")
       print(round(doublet_rate_by_batch[, "Doublet"] * 100, 2))
+      
+      # 添加批次双胞率条形图
+      batch_rate_data <- data.frame(
+        Batch = rownames(doublet_rate_by_batch),
+        DoubletRate = doublet_rate_by_batch[, "Doublet"] * 100
+      )
+      
+      p_rate <- ggplot(batch_rate_data, aes(x = reorder(Batch, -DoubletRate), y = DoubletRate)) +
+        geom_bar(stat = "identity", fill = "#E74C3C", alpha = 0.8) +
+        geom_text(aes(label = paste0(round(DoubletRate, 1), "%")), 
+                 vjust = -0.3, size = 3.5) +
+        labs(
+          title = "各批次双胞率",
+          x = "批次",
+          y = "双胞率 (%)"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1)
+        ) +
+        ylim(0, max(batch_rate_data$DoubletRate) * 1.2)
+      
+      print(p_rate)
     }
     
     # 双胞在各stage中的分布
@@ -344,11 +530,95 @@ if(length(found_doublet_cols) > 0) {
       
       print(doublet_by_stage)
       
+      # 在PDF中添加stage分布图
+      stage_doublet_data <- as.data.frame(doublet_by_stage)
+      colnames(stage_doublet_data) <- c("Stage", "DoubletStatus", "Count")
+      
+      p_stage <- ggplot(stage_doublet_data, 
+                       aes(x = Stage, y = Count, fill = DoubletStatus)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        scale_fill_manual(values = c("Doublet" = "#E74C3C", "Singlet" = "#3498DB")) +
+        labs(
+          title = "各发育阶段双胞分布",
+          x = "发育阶段",
+          y = "细胞数量",
+          fill = "细胞类型"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          legend.position = "bottom"
+        ) +
+        geom_text(aes(label = Count), 
+                 position = position_dodge(width = 0.9),
+                 vjust = -0.3, size = 3.5)
+      
+      print(p_stage)
+      
       # 计算每个stage的双胞率
       doublet_rate_by_stage <- prop.table(doublet_by_stage, margin = 1)
       cat("\n各阶段双胞率:\n")
       print(round(doublet_rate_by_stage[, "Doublet"] * 100, 2))
+      
+      # 添加stage双胞率条形图
+      stage_rate_data <- data.frame(
+        Stage = rownames(doublet_rate_by_stage),
+        DoubletRate = doublet_rate_by_stage[, "Doublet"] * 100
+      )
+      
+      p_stage_rate <- ggplot(stage_rate_data, aes(x = Stage, y = DoubletRate)) +
+        geom_bar(stat = "identity", fill = "#9B59B6", alpha = 0.8, width = 0.7) +
+        geom_text(aes(label = paste0(round(DoubletRate, 1), "%")), 
+                 vjust = -0.3, size = 4) +
+        labs(
+          title = "各发育阶段双胞率",
+          x = "发育阶段",
+          y = "双胞率 (%)"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(hjust = 0.5, face = "bold"),
+          axis.text.x = element_text(size = 11)
+        ) +
+        ylim(0, max(stage_rate_data$DoubletRate) * 1.2)
+      
+      print(p_stage_rate)
     }
+    
+    # 4. 添加总结页面
+    grid.arrange(
+      tableGrob(
+        data.frame(
+          项目 = c("分析对象", "总细胞数", "双胞数", "双胞率", "分析时间"),
+          结果 = c(
+            basename(rds_path),
+            format(ncol(scRNA), big.mark = ","),
+            format(sum(doublet_cells), big.mark = ","),
+            paste0(round(sum(doublet_cells)/ncol(scRNA)*100, 2), "%"),
+            as.character(Sys.time())
+          )
+        ),
+        rows = NULL,
+        theme = ttheme_minimal(
+          base_size = 12,
+          padding = unit(c(6, 6), "mm"),
+          core = list(
+            fg_params = list(hjust = 0, x = 0.1),
+            bg_params = list(fill = c("#F8F9F9", "#EAEDED"), alpha = 0.5)
+          ),
+          colhead = list(
+            fg_params = list(fontface = "bold", hjust = 0, x = 0.1),
+            bg_params = list(fill = "#2C3E50", alpha = 0.7)
+          )
+        )
+      ),
+      nrow = 1
+    )
+    
+    # 关闭PDF设备
+    dev.off()
+    
+    cat("\n✅ 双胞分析图已保存至:", file.path(doublet_output_dir, "doublet_qc_comparison.pdf"), "\n")
     
   } else {
     cat("警告: 未找到足够的数据进行双胞比较分析\n")
@@ -356,7 +626,6 @@ if(length(found_doublet_cols) > 0) {
 } else {
   cat("无法进行双胞分析: 未找到双胞信息列\n")
 }
-
 # ============================================
 # 8. 检查降维信息
 # ============================================
