@@ -1,0 +1,42 @@
+#########################################################################################################
+0--snRNA的seurat文件介绍，细胞总数: 121266 基因总数: 32604；数据维度: 32604 121266
+一般行基因，列细胞，有slot划分；可用slot数: 13 
+  assays              : list            (维度: 1)
+  meta.data           : data.frame      (维度: 121266 x 14)
+  active.assay        : character       (维度: 1)
+  active.ident        : factor          (维度: 121266)
+  graphs              : list            (维度: 2)
+  neighbors           : list            (维度: 0)
+  reductions          : list            (维度: 2)
+  images              : list            (维度: 0)
+  project.name        : character       (维度: 1)
+  misc                : list            (维度: 0)
+  version             : package_version (维度: 1)
+  commands            : list            (维度: 7)
+  tools               : list            (维度: 0)
+#####################################################################################################################
+assay数量1，assay名称是RNA；认识assay具体内容
+Counts矩阵维度: 32604 121266 
+Counts矩阵稀疏度: 93.37 %
+非零值总数: 262282906 
+Counts统计:
+  最小值: 1 
+  最大值: 45641 
+  中位数: 1 
+  平均值: 2.37 
+Data矩阵维度: 32604 121266 
+Data矩阵稀疏度: 93.37 %
+Scale.data维度: 2000 121266 
+可变基因数: 2000 
+前10个可变基因: AT5G14995, AT4G33145, AT5G61412, AT1G61095, AT5G63560, AT3G61880, AT3G51810, AT5G35660, AT1G75830, AT3G04170
+#################################################################################################################################
+元数据维度: 121266 14 一般数据都会存在meta.data里吧
+元数据列名:
+> print(colnames(meta_data))
+ [1] "orig.ident"                        "nCount_RNA"                       
+ [3] "nFeature_RNA"                      "Batch"                            
+ [5] "percent.mt"                        "percent.C"                        
+ [7] "nUMIs"                             "nGenes"                           
+ [9] "Stage"                             "RNA_snn_res.0.5"                  
+[11] "seurat_clusters"                   "pANN_0.25_0.28_6063"              
+[13] "DF.classifications_0.25_0.28_6063" "Doublet"
