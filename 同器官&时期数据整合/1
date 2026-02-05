@@ -1,0 +1,151 @@
+library(Seurat)
+library(data.table)
+library(dplyr)
+
+## =========================
+## 1. 路径与基本参数
+## =========================
+
+raw_path <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/rawdata/bent"
+out_path <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/bent"
+
+geneinfo_file <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/yangjing7/00.ref/Arabidopsis/Araport11/Arabidopsis_thaliana.geneinfo.txt"
+
+dir.create(out_path, recursive = TRUE, showWarnings = FALSE)
+setwd(out_path)
+
+## tor 下面的两个文库
+samples <- c("C250416020", "C250416023","C250416024")
+
+## =========================
+## 2. 读取两个文库，构建 Seurat object
+## =========================
+
+objs <- list()
+
+for (s in samples) {
+
+  cat(">>> Reading sample:", s, "\n")
+
+  matrix_dir <- file.path(raw_path, s, "04.Matrix")
+  stopifnot(dir.exists(matrix_dir))
+
+  ## Read10X
+  counts <- Read10X(data.dir = matrix_dir,gene.column = 1)
+
+  ## 给 cell 加文库前缀，保证唯一
+  colnames(counts) <- paste(s, colnames(counts), sep = ":")
+
+  ## 创建 Seurat 对象
+  obj <- CreateSeuratObject(
+    counts = counts,
+    min.cells = 1,
+    min.features = 1,
+    project = "tor"
+  )
+
+  ## 标注文库批次
+  obj$Batch <- s
+
+  objs[[s]] <- obj
+}
+
+## =========================
+## 3. 合并两个文库
+## =========================
+
+scRNA <- Reduce(function(x, y) merge(x, y), objs)
+rm(objs); gc()
+
+cat("Merged object:\n")
+print(table(scRNA$Batch))
+
+## =========================
+## 4. 读取基因注释，计算 MT / CP 比例
+## =========================
+
+geneinfo <- fread(geneinfo_file)
+
+## 线粒体基因
+mt_genes <- geneinfo[Chr == "ChrM", GeneID]
+mt_genes <- intersect(mt_genes, rownames(scRNA))
+
+## 叶绿体基因
+cp_genes <- geneinfo[Chr == "ChrC", GeneID]
+cp_genes <- intersect(cp_genes, rownames(scRNA))
+
+cat("Mitochondrial genes:", length(mt_genes), "\n")
+cat("Chloroplast genes:", length(cp_genes), "\n")
+
+scRNA[["percent.mt"]] <- PercentageFeatureSet(scRNA, features = mt_genes)
+scRNA[["percent.C"]]  <- PercentageFeatureSet(scRNA, features = cp_genes)
+
+## =========================
+## 5. 整理 QC 指标
+## =========================
+
+## nUMIs = nCount_RNA
+## nGenes = nFeature_RNA
+scRNA$nUMIs  <- scRNA$nCount_RNA
+scRNA$nGenes <- scRNA$nFeature_RNA
+
+qc_stat <- rbind(
+  nReads     = summary(scRNA$nCount_RNA),
+  nUMIs      = summary(scRNA$nUMIs),
+  nGenes     = summary(scRNA$nGenes),
+  percent.mt = summary(scRNA$percent.mt),
+  percent.C  = summary(scRNA$percent.C)
+)
+
+write.table(
+  qc_stat,
+  file = "tor_qc_stat_raw.tsv",
+  sep = "\t",
+  quote = FALSE,
+  col.names = NA
+)
+
+## =========================
+## 6. QC 小提琴图
+## =========================
+
+features <- c(
+  "nCount_RNA",
+  "nFeature_RNA",
+  "percent.mt",
+  "percent.C"
+)
+
+pdf("tor_QC_VlnPlot_raw.pdf", width = length(features) * 4.5, height = 5)
+VlnPlot(
+  scRNA,
+  group.by = "Batch",
+  pt.size = 0,
+  features = features,
+  ncol = length(features)
+)
+dev.off()
+
+## =========================
+## 7. QC 散点图
+## =========================
+
+pdf("tor_QC_Scatter_raw.pdf", width = 7, height = 5)
+for (f in c("nFeature_RNA", "percent.mt", "percent.C")) {
+  p <- FeatureScatter(
+    scRNA,
+    group.by = "Batch",
+    feature1 = "nCount_RNA",
+    feature2 = f
+  )
+  print(p)
+}
+dev.off()
+
+## =========================
+## 8. 保存 Seurat 对象
+## =========================
+
+saveRDS(scRNA, file = "tor_merge_raw.rds")
+
+cat(">>> All done. Seurat object saved.\n")
