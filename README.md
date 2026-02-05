@@ -7,7 +7,7 @@ Matrix数据里包含三个文件，分别是barcodes.tsv（一列，CELL1_N2，
 2，根据数据质量报告提前排除异常文库
 step0-fq.gz文件借助云平台标准流程进行质量报告输出，输出文件为基因矩阵
 step1-分时期整合文库，形成三个seurat的rds文件（tor bent cot)，此处可以看每个数据的基本情况（线粒体叶绿体比例，UMI，features-基因数量）
-step2--整合所有时期的rds数据，形成mergerds文件mergeSilique，此处对rds进行质控（标准如下方法所示），snRNA数据分析基本流程（we followed the standard Seurat pipeline            applying the NormalizeData, FindVariableFeatures, ScaleData and RunPCA with default parameters to create a joint principal component space.）
+step2--整合所有时期的rds数据，形成mergerds文件mergeSilique，此处对rds进行质控（标准如下方法所示），snRNA数据分析基本流程（we followed the standard Seurat pipeline applying the NormalizeData, FindVariableFeatures, ScaleData and RunPCA with default parameters to create a joint principal component space.）这里发现tor批次效应过于显著，需要对数据进行harmony整合
 step3--确定聚类的最佳参数比，使用resolution树决定。(方法部分暂无）--做到这部分可以和snATAC数据进行整合分析了
 step4--细胞类型注释
 方法描述
