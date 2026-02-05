@@ -1,3 +1,6 @@
+qsub -cwd -binding linear:2 -l vf=5g,num_proc=2 -P P21Z28400N0234 -l hostname=bjcas-compute-2-4 step2_optimze_para.sh
+
+
 ###################################################################################################################
 数据背景介绍：
 数据存储路径格式如下/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/rawdata/cot/cotC250416021/04.Matrix
