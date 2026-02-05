@@ -1,1 +1,161 @@
 ####合并step1获得的tor bent cot的seurat的rds数据
+############运行命令行
+Rscript step2.seuratMerge_LibQC.R \
+  /jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/tor/tor_merge_raw.rds \
+  /jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/bent/bent_merge_raw.rds \
+  /jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/cot/cot_merge_raw.rds \
+  /jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique \
+  1000 \
+  500 \
+  2 \
+  30 \
+  20 \
+  0.5 \
+  0.05
+
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(dplyr)
+  library(DoubletFinder)
+})
+
+## =========================
+## 1. 读取参数
+## =========================
+
+args <- commandArgs(trailingOnly = TRUE)
+
+rds1 <- args[1]
+rds2 <- args[2]
+rds3 <- args[3]
+
+outdir <- args[4]
+
+minUMIs        <- as.numeric(args[5])   # 1000
+minGenes       <- as.numeric(args[6])   # 500
+maxPercent.mt  <- as.numeric(args[7])   # 2
+maxPercent.C   <- as.numeric(args[8])   # 30
+dim.usage      <- as.numeric(args[9])   # 20
+res.usage      <- as.numeric(args[10])  # 0.5
+doublet.rate   <- as.numeric(args[11])  # 0.05
+
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+setwd(outdir)
+
+## =========================
+## 2. 读取 3 个时期的 Seurat 对象
+## =========================
+
+cat(">>> Loading Seurat objects\n")
+
+obj1 <- readRDS(rds1)
+obj2 <- readRDS(rds2)
+obj3 <- readRDS(rds3)
+
+obj1$Stage <- "Stage1"
+obj2$Stage <- "Stage2"
+obj3$Stage <- "Stage3"
+
+## =========================
+## 3. 合并三个时期
+## =========================
+
+cat(">>> Merging datasets\n")
+
+scRNA <- merge(obj1, y = c(obj2, obj3))
+rm(obj1, obj2, obj3); gc()
+
+print(table(scRNA$Stage))
+
+## =========================
+## 4. QC 过滤
+## =========================
+
+cat(">>> QC filtering\n")
+
+scRNA <- subset(
+  scRNA,
+  subset =
+    nCount_RNA   >= minUMIs &
+    nFeature_RNA >= minGenes &
+    percent.mt   <= maxPercent.mt &
+    percent.C    <= maxPercent.C
+)
+
+cat("Cells after QC:", ncol(scRNA), "\n")
+
+## =========================
+## 5. 标准降维与聚类
+## =========================
+
+scRNA <- NormalizeData(scRNA)
+scRNA <- FindVariableFeatures(scRNA, nfeatures = 2000)
+scRNA <- ScaleData(scRNA)
+scRNA <- RunPCA(scRNA, npcs = max(dim.usage, 30))
+
+scRNA <- FindNeighbors(scRNA, dims = 1:dim.usage)
+scRNA <- FindClusters(scRNA, resolution = res.usage)
+scRNA <- RunUMAP(scRNA, dims = 1:dim.usage)
+
+## =========================
+## 6. DoubletFinder 去双胞
+## =========================
+
+cat(">>> Running DoubletFinder\n")
+
+sweep.res <- paramSweep_v3(scRNA, PCs = 1:dim.usage, sct = FALSE)
+sweep.stats <- summarizeSweep(sweep.res)
+bcmvn <- find.pK(sweep.stats)
+
+best.pK <- bcmvn$pK[which.max(bcmvn$BCmetric)]
+best.pK <- as.numeric(as.character(best.pK))
+
+nExp <- round(doublet.rate * ncol(scRNA))
+
+scRNA <- doubletFinder_v3(
+  scRNA,
+  PCs = 1:dim.usage,
+  pN = 0.25,
+  pK = best.pK,
+  nExp = nExp,
+  reuse.pANN = FALSE,
+  sct = FALSE
+)
+
+df.col <- grep("DF.classifications", colnames(scRNA@meta.data), value = TRUE)
+
+scRNA$Doublet <- scRNA@meta.data[[df.col]]
+
+cat("Doublet summary:\n")
+print(table(scRNA$Doublet))
+
+## =========================
+## 7. QC 图
+## =========================
+
+pdf("QC_VlnPlot_afterQC.pdf", width = 18, height = 5)
+VlnPlot(
+  scRNA,
+  features = c("nCount_RNA", "nFeature_RNA", "percent.mt", "percent.C"),
+  group.by = "Stage",
+  pt.size = 0
+)
+dev.off()
+
+pdf("UMAP_by_cluster.pdf", width = 6, height = 5)
+DimPlot(scRNA, reduction = "umap", label = TRUE)
+dev.off()
+
+pdf("UMAP_by_stage.pdf", width = 6, height = 5)
+DimPlot(scRNA, reduction = "umap", group.by = "Stage")
+dev.off()
+
+## =========================
+## 8. 保存结果
+## =========================
+
+saveRDS(scRNA, file = "tor_3stage_QC_doublet.rds")
+
+cat(">>> All done\n")
