@@ -54,9 +54,9 @@ obj1 <- readRDS(rds1)
 obj2 <- readRDS(rds2)
 obj3 <- readRDS(rds3)
 
-obj1$Stage <- "Stage1"
-obj2$Stage <- "Stage2"
-obj3$Stage <- "Stage3"
+obj1$Stage <- "tor"
+obj2$Stage <- "bent"
+obj3$Stage <- "cot"
 
 ## =========================
 ## 3. 合并三个时期
@@ -156,6 +156,7 @@ dev.off()
 ## 8. 保存结果
 ## =========================
 
-saveRDS(scRNA, file = "tor_3stage_QC_doublet.rds")
+saveRDS(scRNA, file = "silique_3stage_after_QC_doublet.rds")
 
 cat(">>> All done\n")
+
