@@ -16,7 +16,8 @@ Matrix数据里包含三个文件，分别是barcodes.tsv（一列，CELL1_N2，
 😉step3-对数据进行harmony处理去批次效应，注意harmony不是对counts矩阵做，而是对降维后的PCA数据作处理，counts  → PCA → Harmony → neighbors / cluster / UMAP
 😉step4--确定聚类的最佳参数比，使用resolution树决定。(方法部分暂无）--做到这部分可以和snATAC数据进行整合分析了
 😁steo5--根据质量控制确定的dims resolution重新进行聚类分析，展示分簇结果。
-😉step5--细胞类型注释
+###########################################################################################################
+😉step5--细胞类型注释，重点注意标记基因的选择（非常重要）以及Dotplot图的解读
 方法描述
 云平台流程描述（from chenchuan,2025,cell)略有修改
 snRNA-seq data were processed to obtain the read count matrices for each gene and each cell via an open-source pipeline (https://github.com/MGI-tech-bioinformatics/DNBelab_C_Series_HT_scRNA-analysis-software). First, raw sequencing reads were filtered (removing reads with an average base quality score lower than 4, more than 2 bases with a quality score lower than 10, or containing N bases or improper barcodes) and demultiplexed by barcode assignment. The obtained reads were subsequently aligned to the arabidopisis reference genome (TAIR10) using Spliced Transcripts Alignment to a Reference (STAR) (Dobin et al., 2013) and annotated to the gene set (Gmax_ZH13_V2.1) via a preprocessing and interative suite for single-cell data analysis (Shi et al., 2022). Valid cells were automatically identified based on the UMI number distribution of each cell via the “barcodeRanks” function of the DropletUtils tool (Lun et al., 2019) to remove background beads and beads with UMI counts less than 500. A preprocessing and interative suite for single-cell data analysis (Shi et al., 2022) was then applied to calculate the gene expression of cells and create a gene × cell matrix for each library. 
