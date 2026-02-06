@@ -1,0 +1,97 @@
+#!/usr/bin/env Rscript
+
+#############################
+# Standarded vs Specific clustering
+#############################
+
+# ==========================
+# 路径与参数
+# ==========================
+rds_file <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique/harmony/silique_3stage_after_QC_doublet_harmony.rds"
+
+outdir <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique/harmony"
+
+SampleID <- "3siliqueLast"
+
+if (!dir.exists(outdir)) {
+  dir.create(outdir, recursive = TRUE)
+}
+
+# ==========================
+# 加载环境
+# ==========================
+.libPaths(c(
+  "/jdfsbjcas1/ST_BJ/P21Z28400N0234/zhangyi9/software/R/x86_64-pc-linux-gnu-library/4.1/",
+  .libPaths()
+))
+
+suppressMessages(library(Seurat))
+suppressMessages(library(ggplot2))
+
+# ==========================
+# 读取对象 & 细胞数检查
+# ==========================
+cat("Reading Seurat object:\n", rds_file, "\n")
+obj <- readRDS(rds_file)
+cat("Cell number:", ncol(obj), "\n")
+
+# ============================================================
+# 1️⃣ Standarded pipeline（resolution = 1.5，其它默认）
+# ============================================================
+cat("Running standarded clustering...\n")
+
+obj_std <- obj
+
+obj_std <- NormalizeData(obj_std)
+obj_std <- FindVariableFeatures(obj_std)
+obj_std <- ScaleData(obj_std)
+obj_std <- RunPCA(obj_std)
+
+obj_std <- RunUMAP(obj_std, dims = 1:30)
+obj_std <- FindNeighbors(obj_std, dims = 1:30)
+obj_std <- FindClusters(obj_std, resolution = 1.5)
+
+# 绘图
+pdf(file.path(outdir, paste0(SampleID, "_standarded_cluster.pdf")),
+    width = 8, height = 6)
+print(
+  DimPlot(obj_std, reduction = "umap", label = TRUE) +
+    ggtitle("Standarded clustering (resolution = 1.5)")
+)
+dev.off()
+
+# ============================================================
+# 2️⃣ Specific pipeline（手动指定 UMAP + clustering 参数）
+# ============================================================
+cat("Running specific clustering...\n")
+
+obj_sp <- obj
+
+obj_sp <- NormalizeData(obj_sp)
+obj_sp <- FindVariableFeatures(obj_sp)
+obj_sp <- ScaleData(obj_sp)
+obj_sp <- RunPCA(obj_sp)
+
+obj_sp <- FindNeighbors(obj_sp, dims = 1:30, n.neighbors = 30)
+
+obj_sp <- RunUMAP(
+  obj_sp,
+  dims = 1:30,
+  n.neighbors = 30,
+  n.epochs = 200,
+  min.dist = 0.05,
+  spread = 4
+)
+
+obj_sp <- FindClusters(obj_sp, resolution = 0.5)
+
+# 绘图
+pdf(file.path(outdir, paste0(SampleID, "_specific_cluster.pdf")),
+    width = 8, height = 6)
+print(
+  DimPlot(obj_sp, reduction = "umap", label = TRUE) +
+    ggtitle("Specific clustering (res=0.5, neighbors=30)")
+)
+dev.off()
+
+cat("All done! PDFs saved in:\n", outdir, "\n")
