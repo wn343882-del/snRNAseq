@@ -1,0 +1,141 @@
+###########总结标记基因的种类，绘制Dotplot以及Feature############################
+#!/usr/bin/env Rscript
+
+##############################
+## Cell type marker plotting
+## DotPlot & FeaturePlot
+##############################
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+  library(patchwork)
+})
+
+## ==========================
+## 1. 路径设置
+## ==========================
+
+rds_file <- ""
+
+marker_file <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/AraSeed260206Sum.txt"
+
+outdir <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique/harmony/cellTypeAnno"
+
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+setwd(outdir)
+
+## ==========================
+## 2. 读取数据
+## ==========================
+
+cat("Reading Seurat object...\n")
+obj <- readRDS(rds_file)
+cat("Cells:", ncol(obj), "\n")
+
+cat("Reading marker table...\n")
+markers <- read.table(
+  marker_file,
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE
+)
+
+colnames(markers) <- c("Gene_ID", "Gene_name", "celltype")
+
+## ==========================
+## 3. 基因过滤（只保留对象中存在的）
+## ==========================
+
+genes_use <- intersect(markers$Gene_ID, rownames(obj))
+
+markers_use <- markers %>%
+  filter(Gene_ID %in% genes_use)
+
+cat("Markers used:", nrow(markers_use), "\n")
+
+if (nrow(markers_use) == 0) {
+  stop("No marker genes found in Seurat object!")
+}
+
+## ==========================
+## 4. 构建展示用基因标签
+## ==========================
+
+markers_use$plot_label <- paste(
+  markers_use$Gene_ID,
+  markers_use$Gene_name,
+  markers_use$celltype,
+  sep = " | "
+)
+
+## DotPlot / FeaturePlot 用的 gene 向量
+features_use <- markers_use$Gene_ID
+names(features_use) <- markers_use$plot_label
+
+## ==========================
+## 5. DotPlot（基因集合）
+## ==========================
+
+cluster_num <- length(levels(Idents(obj)))
+h <- ceiling(length(features_use) / 5) * 2
+
+pdf("CellType_Markers_DotPlot.pdf",
+    width = cluster_num * 1.2,
+    height = h)
+
+DotPlot(
+  obj,
+  features = features_use
+) +
+  coord_flip() +
+  scale_y_discrete(labels = names(features_use)) +
+  theme_bw() +
+  labs(
+    title = "Cell type marker DotPlot",
+    x = NULL,
+    y = NULL
+  )
+
+dev.off()
+
+## ==========================
+## 6. FeaturePlot（基因集合）
+## ==========================
+
+pdf("CellType_Markers_FeaturePlot.pdf",
+    width = 18,
+    height = h * 2)
+
+FeaturePlot(
+  obj,
+  features = features_use,
+  label = TRUE,
+  order = TRUE,
+  combine = TRUE,
+  ncol = 5,
+  min.cutoff = "q9"
+) &
+  theme(plot.title = element_text(size = 9)) &
+  labs(title = names(features_use))
+
+dev.off()
+
+## ==========================
+## 7. （可选）单基因绘图示例
+## ==========================
+## ⚠️ 默认不执行，如需使用请取消注释
+
+# gene_single <- "AT1G01010"
+#
+# pdf(paste0(gene_single, "_DotPlot.pdf"), width = 6, height = 4)
+# DotPlot(obj, features = gene_single) + theme_bw()
+# dev.off()
+#
+# pdf(paste0(gene_single, "_FeaturePlot.pdf"), width = 6, height = 5)
+# FeaturePlot(obj, features = gene_single)
+# dev.off()
+
+cat(">>> All plots finished. Results saved in:\n", outdir, "\n")
+
