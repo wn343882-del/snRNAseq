@@ -1,0 +1,67 @@
+#####################在此处看PCA，决定dims维度，后续harmony沿用此维度信息##############################################
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+})
+
+# ==========================
+# 路径
+# ==========================
+rds_file <- "/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique/silique_3stage_after_QC_doublet.rds.rds"
+
+outdir <- "./PCA_diagnosis"
+setwd("/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/results/mergeSilique")
+dir.create(outdir, showWarnings = FALSE)
+
+# ==========================
+# 读取对象
+# ==========================
+obj <- readRDS(rds_file)
+
+obj <- RunPCA(
+  obj,
+  npcs = 50,
+  verbose = FALSE,
+  assay = "RNA",
+  reduction.name = "pca",
+  reduction.key = "PC_"
+)
+ 
+# ==========================
+# 1️⃣ ElbowPlot
+# ==========================
+pdf(file.path(outdir, "ElbowPlot_PC1_50.pdf"), width = 6, height = 5)
+print(ElbowPlot(obj, ndims = 50))
+dev.off()
+
+# ==========================
+# 2️⃣ PCA variance explained
+# ==========================
+pca_sd <- obj@reductions$pca@stdev
+pca_var <- pca_sd^2
+pca_var_ratio <- pca_var / sum(pca_var)
+pca_cum <- cumsum(pca_var_ratio)
+
+var_df <- data.frame(
+  PC = 1:length(pca_var_ratio),
+  Variance = pca_var_ratio,
+  Cumulative = pca_cum
+)
+
+write.csv(var_df,
+          file = file.path(outdir, "PCA_variance_explained.csv"),
+          row.names = FALSE)
+
+# ==========================
+# 3️⃣ JackStraw（慎用，耗时）
+# ==========================
+obj <- JackStraw(obj, dims = 50, num.replicate = 100)
+obj <- ScoreJackStraw(obj, dims = 1:50)
+
+pdf(file.path(outdir, "JackStrawPlot_PC1_50.pdf"), width = 8, height = 6)
+print(JackStrawPlot(obj, dims = 1:50))
+dev.off()
+
+cat(">>> PCA diagnostics finished.\n")
