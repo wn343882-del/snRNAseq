@@ -1,0 +1,10 @@
+前期需要申请集群账号，申请完成，有双因素验证，及初始密码
+需要软件xftp(本地/终端交互） xshell（终端操作i）
+登录使用邮箱，初始密码设置，更改密码
+登录目录  cd /jdfsbjcas1/ST_BJ/P21Z28400N0234
+构建自己的目录：mkdir someone
+配置环境变量： bashrc.bak(从别人目录下复制）
+cp bashrc.bak ./
+mv bashrc.bak bashrc
+source bashrc
+之后可以正常使用集群下所有R包,python包以及conda环境
