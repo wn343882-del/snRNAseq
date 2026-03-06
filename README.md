@@ -6,8 +6,12 @@ qsub -cwd -binding linear:2 -l vf=5g,num_proc=2 -P P21Z28400N0234 -l hostname=bj
 ###################################################################################################################
 数据背景介绍：
 数据存储路径格式如下/jdfsbjcas1/ST_BJ/P21Z28400N0234/wangning12/1_project/4-multiOmics/RNA/rawdata/cot/cotC250416021/04.Matrix
-Matrix数据里包含三个文件，分别是barcodes.tsv（一列，CELL1_N2，代表单个核数据），features.tsv（一列，AT1G01470的基因号），matrix.mtx(Matrix Market 标准格式下的coordinate = 稀疏矩阵，计数值为整数，三列列，第一列是行数（features数据里包含的基因数目，第二个barcode细胞核数，第三列非零元素个数表达过的基因×细胞，意义： 1 2 1 第一个基因在第二个细胞核里的count=1)
-查看集群数据前几行数据zcat matrix.mtx.gz | head -n 30
+Matrix数据里包含三个文件，分别是barcodes.tsv（一列，CELL1_N2，代表单个核数据），features.tsv（一列，AT1G01470的基因号），matrix.mtx(Matrix Market 标准格式下的coordinate = 稀疏矩阵，计数值为整数，三列列，第一列是行数（features数据里包含的基因数目，第二个barcode细胞核数，第三列非零元素个数表达过的基因×细胞，
+意义： 1 2 1 第一个基因在第二个细胞核里的count=1)
+查看集群数据前几行数据
+```R
+zcat matrix.mtx.gz | head -n 30
+```
 #################################################################################################################
 😉00-seurta对象的基础认知：slot都有什么，数据结构长什么样
 😉step0-fq.gz文件借助云平台标准流程进行质量报告输出，输出文件为基因矩阵
