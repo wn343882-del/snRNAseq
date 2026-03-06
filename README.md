@@ -1,4 +1,6 @@
+``` R
 qsub -cwd -binding linear:2 -l vf=5g,num_proc=2 -P P21Z28400N0234 -l hostname=bjcas-compute-2-4 step2_optimze_para.sh
+```
 补充：seurat常用命令Reductions(obj)查看维度；head(obj@meta.data$Batch)
 
 ###################################################################################################################
